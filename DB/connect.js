@@ -1,13 +1,15 @@
 var mysql = require('mysql');
 
 const DBname = "firmware_update";
+const metadata_table = "firmware_update_metadata";
 const device_table = "device_data";
 const firmware_update_transactions_table = "firmware_update_transactions";
+var con;
 
 var self = module.exports = {
 
     connectDB: function() {
-        var con = mysql.createConnection({
+        con = mysql.createConnection({
             host: "localhost",
             user: "root",
             password: "",
@@ -32,6 +34,15 @@ var self = module.exports = {
     //insert to firmware update transactions table
     saveFirmwareUpdateTransactions: function(device_id,manufacturer_id,metadata_id,old_fv,new_fv) {
         var sql = "INSERT INTO " + firmware_update_transactions_table + " (device_id,manufacturer_id,metadata_id, old_firmware_version, new_firmware_version) VALUES ("+device_id+","+manufacturer_id+","+metadata_id+","+old_fv+","+new_fv+");";
+        con.query(sql, function (err, result) {
+            if (err) throw err;
+            console.log("1 record inserted");
+        });
+    },
+
+    //insert metadata to metadata table
+    saveMetadataFirmwareUpdate: function(hash,manufacturer_id,firmware_version,dtype,release_date,url) {
+        var sql = "INSERT INTO " + metadata_table + " (hash,manufacturer_id,firmware_version,device_type,release_date,url) VALUES ('"+hash+"',"+manufacturer_id+","+firmware_version+",'"+dtype+"','"+release_date+"','"+url+"');";
         con.query(sql, function (err, result) {
             if (err) throw err;
             console.log("1 record inserted");

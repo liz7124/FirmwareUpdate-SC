@@ -1,5 +1,9 @@
 const tools = require('./tools');
+const fs = require('fs');
+const Web3 = require('web3');
 //const rp = require('request-promise-native');
+
+const web3 = new Web3(new Web3.providers.HttpProvider('http://localhost:8545'));
 
 // setup parameters that are known by the device.
 const manufacturerPrivateKey = tools.getManufacturerPrivateKey();
@@ -11,20 +15,29 @@ const manufacturerAddress = tools.getManufacturerAddress();
 const RC = tools.constructSmartContract(tools.getContractABI(), tools.getContractAddress());
 
 async function main() {
-    const firmware_metadata = {
-        Uid: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", //hash of new firmware update's binary file
-        firmware_version: 1,
-        Mid: 1,
-        release_date: tools.convertStringToByte("02-2020"),
-        dtype: tools.convertStringToByte("temperature_sensor"),
-        url: tools.convertStringToByte("http://127.0.0.1")
+    try {
+        var fu_file = fs.readFileSync('/home/lizz/MyProjects/test-fu/server/downloads/newfirmware.zip','utf8');
+    } catch(e) {
+        console.log('Error:',e.stack);
     }
 
-    const Uid_hash = tools.hashPayload(firmware_metadata.Uid);
+    const firmware_metadata = {
+        Uid: tools.hashPayload(fu_file), //hash of new firmware update's binary file
+        firmware_version: 1,
+        Mid: 1,
+        release_date: tools.convertStringToByte("March-2020"),
+        dtype: tools.convertStringToByte("temperature_sensor"),
+        url: tools.convertStringToByte("http://192.168.0.30:5000")
+    }
+    console.log(firmware_metadata.Uid);
+    console.log(firmware_metadata.release_date);
     
-    //store firmware update metadata
+    //hash + signing
+    var metadata_payload = web3.utils.keccak256(web3.eth.abi.encodeParameters(["bytes32", "int", "int", "bytes32", "bytes32", "bytes32"],[firmware_metadata.Uid,firmware_metadata.firmware_version,firmware_metadata.Mid,firmware_metadata.release_date,firmware_metadata.dtype,firmware_metadata.url]));
+    const metadata_signature = tools.signPayload(metadata_payload, manufacturerPrivateKey);
+
     // sending transaction to register payload to the smart contract
-    let tx = await RC.methods.storeFirmwareMetadata(Uid_hash, firmware_metadata.firmware_version, firmware_metadata.Mid, firmware_metadata.release_date, firmware_metadata.dtype, firmware_metadata.url).send({
+    let tx = await RC.methods.storeFirmwareMetadata(firmware_metadata.Uid, firmware_metadata.firmware_version, firmware_metadata.Mid, firmware_metadata.release_date, firmware_metadata.dtype, firmware_metadata.url, metadata_signature).send({
         from: manufacturerAddress,
         gas: 1000000
     });
@@ -39,25 +52,7 @@ async function main() {
         metadataSign: metadata_signature
     }
     const offChainPayload = await tools.encryptPayload(JSON.stringify(payloadForGateway), gatewayPublicKey);
-
-    //send metadata to gateway
-    let options = {
-        method: 'POST',
-        uri: tools.getGatewayEnpoint(),
-        body: {offChainPayload},
-        resolveWithFullResponse: true,
-        json: true // Automatically stringifies the body to JSON
-    };
-    rp(options).then(function (response) {
-        console.log('Response status code: ', response.statusCode);
-        console.log('Response body: ', response.body);
-    }).catch(function (err) {
-        console.log(err);
-    })
     */
-
-
-//sign FU metadata
 }
 
 main();

@@ -44,6 +44,15 @@ var self = module.exports = {
      */
     hashPayload: function (payload) {
         return EthCrypto.hash.keccak256(payload);
+        //var hash = web3.utils.keccak256(web3.eth.abi.encodeParameters(payload));
+        //return hash;
+    },
+    /**
+     * Add prefixed to the hash messages
+     * @param {string} hash hash messages. 
+     */
+    prefixedHash: function (hash) {
+        return EthCrypto.hash.keccak256("NewFirmwareUpdate:"+hash);
     },
     /**
      * Encrypt the payload with destination public key.
@@ -52,6 +61,14 @@ var self = module.exports = {
      */
     signPayload: function (payloadHash, sourcePrivateKey) {
         return EthCrypto.sign(sourcePrivateKey, payloadHash);
+    },
+    /**
+     * Recover the ethereum address from given signature.
+     * @param {string} signature    the signature.
+     * @param {string} hash         the hash pf the payload tied to the signature.
+     */
+    recoverAddress: function (signature, hash) {
+        return EthCrypto.recover(signature, hash);
     },
     /**
      * Convert string to byte (for smart contract).
