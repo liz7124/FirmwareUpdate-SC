@@ -5,9 +5,7 @@ const Web3 = require('web3');
 
 const web3 = new Web3(new Web3.providers.HttpProvider('http://localhost:8545'));
 
-// setup parameters that are known by the device.
 const manufacturerPrivateKey = tools.getManufacturerPrivateKey();
-//const gatewayPublicKey = tools.getGatewayPublicKey();
 const manufacturerAddress = tools.getManufacturerAddress();
 
 //deploy firmware update smart contract
@@ -23,11 +21,11 @@ async function main() {
 
     const firmware_metadata = {
         Uid: tools.hashPayload(fu_file), //hash of new firmware update's binary file
-        firmware_version: 1,
+        firmware_version: 2,
         Mid: 1,
         release_date: tools.convertStringToByte("March-2020"),
         dtype: tools.convertStringToByte("temperature_sensor"),
-        url: tools.convertStringToByte("http://192.168.0.30:5000")
+        url: tools.convertStringToByte("http://192.168.0.30/downloads")
     }
     console.log(firmware_metadata.Uid);
     console.log(firmware_metadata.release_date);
@@ -43,8 +41,13 @@ async function main() {
     });
     
     console.log(tx);
+}
 
-    /*const metadata_payload = JSON.stringify(firmware_metadata);
+main();
+
+
+
+/*const metadata_payload = JSON.stringify(firmware_metadata);
     const metadata_payload_hash = tools.hashPayload(metadata_payload);
     const metadata_signature = tools.signPayload(metadata_payload_hash, manufacturerPrivateKey);
     const payloadForGateway = {
@@ -53,6 +56,3 @@ async function main() {
     }
     const offChainPayload = await tools.encryptPayload(JSON.stringify(payloadForGateway), gatewayPublicKey);
     */
-}
-
-main();

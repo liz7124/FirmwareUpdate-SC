@@ -7,6 +7,7 @@ const Web3 = require('web3');
 const gatewayPath = './assets/gateway.json';
 const manufacturerPath = './assets/manufacturer.json';
 const contractPath = './assets/contract.json';
+const gatewayPathB = './assets/gateway02.json';
 const contractABIPath = '../build/contracts/FirmwareUpdate.json';
 
 //endpoints
@@ -148,6 +149,19 @@ var self = module.exports = {
     getGatewayAddress: function() {
         let obj = self.readFile(gatewayPath);
         return web3.utils.toChecksumAddress(obj.address);
+    },
+
+    getGatewayBAddress: function() {
+        let obj = self.readFile(gatewayPathB);
+        return web3.utils.toChecksumAddress(obj.address);
+    },
+    getGatewayBPrivateKey: function () {
+        let obj = self.readFile(gatewayPathB);
+        return obj.privateKey;
+    },
+    getGatewayBPublicKey: function () {
+        let obj = self.readFile(gatewayPathB);
+        return EthCrypto.publicKeyByPrivateKey(obj.privateKey);
     },
 
     /**

@@ -8,12 +8,11 @@ contract FirmwareUpdate {
         bytes32 release_date; //Month-year: mm-yyyy
         bytes32 dtype; //device type
         bytes32 url; //url to download binary file. Need or not ?
-        bool isVerified;
     }
 
     //key: hash of binary firmware update file, value firmware struct
     mapping (bytes32 => firmware) public firmwareMetadata;
-    string public signedPrefix = "NewFirmwareUpdate:";
+    //string public signedPrefix = "NewFirmwareUpdate:";
 
     event NewFirmwareStored(address sender, bytes32 Uid);
     event VerificationFailed();
