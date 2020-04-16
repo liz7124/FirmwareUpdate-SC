@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Generation Time: Mar 26, 2020 at 12:04 PM
+-- Generation Time: Apr 16, 2020 at 10:24 AM
 -- Server version: 10.4.11-MariaDB
 -- PHP Version: 7.4.3
 
@@ -37,22 +37,20 @@ CREATE TABLE `device_data` (
   `last_update` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00' ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
--- --------------------------------------------------------
-
 --
 -- Table structure for table `firmware_update_metadata`
 --
 
 CREATE TABLE `firmware_update_metadata` (
   `metadata_id` int(11) NOT NULL,
+  `hash` text NOT NULL,
   `manufacturer_id` int(11) NOT NULL,
   `firmware_version` int(11) NOT NULL,
   `device_type` varchar(255) NOT NULL,
   `release_date` varchar(255) NOT NULL,
-  `url` text NOT NULL
+  `url` text NOT NULL,
+  `signature` text NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
--- --------------------------------------------------------
 
 --
 -- Table structure for table `firmware_update_transactions`
@@ -115,13 +113,13 @@ ALTER TABLE `manufacturer`
 -- AUTO_INCREMENT for table `device_data`
 --
 ALTER TABLE `device_data`
-  MODIFY `device_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `device_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `firmware_update_metadata`
 --
 ALTER TABLE `firmware_update_metadata`
-  MODIFY `metadata_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `metadata_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `firmware_update_transactions`
