@@ -1,12 +1,16 @@
 const express = require('express');
 const tools = require('./tools');
-const rp = require('request-promise-native');
 const Web3 = require('web3');
+const fs = require('fs');
 const dbTools = require('../DB/connect.js');
+const net = require("net");
+const NodeCache = require( "node-cache" );
+
+const myCache = new NodeCache();
 
 //dbTools.connectDB();
 
-const web3 = new Web3(new Web3.providers.HttpProvider('http://localhost:8545'));
+const web3 = new Web3(new Web3.providers.HttpProvider('http://192.168.0.30:8545'));
 
 const RC = tools.constructSmartContract(tools.getContractABI(), tools.getContractAddress());
 
@@ -58,10 +62,40 @@ app.post('/checknewfirmware', async (request, response) => {
                     //compare the new and current version
                     for (const i in res) {
                         if (res[i]['firmware_version'] > current_firmware_version) {
-                            //download new firmware update in the manufacturer's server
-                            //verify binary file (compare hash)
                             console.log("FOUND METADATA EXIST");
-                            response.send("true");
+                            //download new firmware update in the manufacturer's server
+                            console.log("Downloading from manufacturer's server...");
+                            
+                            let socket;
+                            socket = net.connect(5000, '192.168.0.30');
+
+                            let ostream = fs.createWriteStream("./downloads/newfirmware.zip");
+                            let date = new Date(), size = 0, elapsed;
+                            socket.on('data', chunk => {
+                                size += chunk.length;
+                                elapsed = new Date() - date;
+                                socket.write(`\r${(size / (1024 * 1024)).toFixed(2)} MB of data was sent. Total elapsed time is ${elapsed / 1000} s`)
+                                process.stdout.write(`\r${(size / (1024 * 1024)).toFixed(2)} MB of data was sent. Total elapsed time is ${elapsed / 1000} s`);
+                                ostream.write(chunk);
+                            });
+                            socket.on("end", () => {
+                                console.log(`\nFinished getting file. speed was: ${((size / (1024 * 1024)) / (elapsed / 1000)).toFixed(2)} MB/s`);
+                                //process.exit();
+                                //verify binary file (compare hash)
+                                console.log("Verifying...");
+                                try {
+                                    var fu_file = fs.readFileSync('/home/pi/MyProjects/FirmwareUpdate-SC/server/downloads/newfirmware.zip','utf8');
+                                } catch(e) {
+                                    console.log('Error:',e.stack);
+                                }
+                                var hash_metadata = tools.hashPayload(fu_file)
+                                if (hash_metadata == res[i]['hash']) {
+                                    console.log("Verified!")
+                                    response.send("true");
+                                } else {
+                                    response.send("false");
+                                }
+                            });
                         } else {
                             console.log("NOT FOUND METADATA");
                         }
@@ -75,6 +109,9 @@ app.post('/checknewfirmware', async (request, response) => {
         console.log(err);
     }
 });
+
+//update firmware version in DB
+//insert firmware update transaction to DB
 
 app.post('/gwchecknewfirmware', async (request, response) => {
     //receive request from client (iotivity device)
@@ -102,9 +139,29 @@ app.post('/gwchecknewfirmware', async (request, response) => {
                 for (const i in res) {
                     if (res[i]['firmware_version'] > current_firmware_version) {
                         console.log("FOUND METADATA EXIST");
-                        //U+c+Sign(U,c) send back to gateway02
+                        //Uid+c+Sign(Uid,c) send back to gateway02
+                        var c = 1;
 
-                        response.send("true");
+                         //hash+sign
+                        var res_payload_hash = web3.utils.keccak256(web3.eth.abi.encodeParameters(["bytes32", "int", "int", "bytes32", "bytes32", "bytes32", "bytes32","int"],[res[i]['hash'],res[i]['firmware_version'],res[i]['manufacturer_id'],res[i]['release_date'],res[i]['device_type'],res[i]['url'],res[i]['signature'], c]));
+                        var res_payload_signature = tools.signPayload(res_payload_hash, gatewayPrivateKey);
+
+                        var res_payload = {
+                            Uid: res[i]['hash'],
+                            fv: res[i]['firmware_version'],
+                            Mid: res[i]['manufacturer_id'],
+                            release_date: res[i]['release_date'],
+                            dtype: res[i]['device_type'],
+                            url: res[i]['url'],
+                            manufacturer_signature: res[i]['signature'],
+                            c: c,
+                            sign: res_payload_signature
+                        }
+                        
+                        var nounce = {c:1};
+                        var success = myCache.set("nounce",nounce,300);
+                        
+                        response.send(res_payload);
                     } else {
                         console.log("NOT FOUND METADATA");
                     }
@@ -115,36 +172,6 @@ app.post('/gwchecknewfirmware', async (request, response) => {
         }
     }
 });
-
-app.post('/downloadnewfirmware', async(request, response) => {
-    console.log("Receive POST request--Download\n");
-    console.log(request.body);
-    const Mid = request.body.Mid;
-    const current_firmware_version = request.body.fv;
-    
-    //get from DB metadata info (URL)
-
-    //get request to manufacturer
-    let options = {
-        method: 'GET',
-        uri: "http://192.168.0.30:5000/",
-        body: {},
-        resolveWithFullResponse: true,
-        json: true
-    };
-    rp(options).then(function (response) {
-        console.log('Response status code: ', response.statusCode)
-        console.log('Response body: ', response.body);
-    }).catch(function (err) {
-        console.log(err);
-    });
-
-});
-
-//verify the response from smart contract
-//download update from manufacturer server
-//verify the hash of the binary--> check in the smart contract exist or not
-//send to device
 
 app.listen(4000, async(request, response) => {
     console.log("I'm listening");
@@ -158,7 +185,8 @@ app.listen(4000, async(request, response) => {
             toBlock: 'latest'
         },*/
         (err, events) => {
-            //console.log(events.length);
+            console.log(err);
+            console.log(events.length);
             console.log("Receive Events: NewFirmwareStored!");
             if (events) {
                 Uid = events[0]['returnValues']['Uid'];
