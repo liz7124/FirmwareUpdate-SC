@@ -6,12 +6,11 @@ const Web3 = require('web3');
 //path
 const gatewayPath = './assets/gateway.json';
 const manufacturerPath = './assets/manufacturer.json';
-const contractPath = './assets/contract.json';
-const gatewayPathB = './assets/gateway02.json';
-const contractABIPath = '../build/contracts/FirmwareUpdate.json';
+//const contractPath = './assets/contract.json';
+//const contractABIPath = '../build/contracts/FirmwareUpdate.json';
 
 //endpoints
-const gatewayEndpoint = 'http://localhost:4000/newfirmwareupdate';
+const gatewayEndpoint = 'http://192.168.0.30:4000/newfirmwareupdate';
 
 // for symmetric encryption and decryption
 const algorithm = 'aes256';
@@ -32,21 +31,11 @@ var self = module.exports = {
         return JSON.parse(data);
     },
     /**
-     * Construct a web3 object of the smart contract.
-     * @param {string} abi       the ABI of the contract.
-     * @param {string} address   the address of the deployed contract.
-     */
-    constructSmartContract: function (abi, address) {
-        return new web3.eth.Contract(abi, address);
-    },
-    /**
      * Hash the payload.
      * @param {string} payload  the payload to be hashed.
      */
     hashPayload: function (payload) {
         return EthCrypto.hash.keccak256(payload);
-        //var hash = web3.utils.keccak256(web3.eth.abi.encodeParameters(payload));
-        //return hash;
     },
     /**
      * Add prefixed to the hash messages
@@ -149,56 +138,6 @@ var self = module.exports = {
     getGatewayAddress: function() {
         let obj = self.readFile(gatewayPath);
         return web3.utils.toChecksumAddress(obj.address);
-    },
-
-    getGatewayBAddress: function() {
-        let obj = self.readFile(gatewayPathB);
-        return web3.utils.toChecksumAddress(obj.address);
-    },
-    getGatewayBPrivateKey: function () {
-        let obj = self.readFile(gatewayPathB);
-        return obj.privateKey;
-    },
-    getGatewayBPublicKey: function () {
-        let obj = self.readFile(gatewayPathB);
-        return EthCrypto.publicKeyByPrivateKey(obj.privateKey);
-    },
-
-    /**
-     * Get manufacturer private key from ganache configuration.
-     */
-    getManufacturerPrivateKey: function () {
-        let obj = self.readFile(manufacturerPath);
-        return obj.privateKey;
-    },
-    /**
-     * Get manufacturer public key from ganache configuration.
-     */
-    getManufacturerPublicKey: function () {
-        let obj = self.readFile(manufacturerPath);
-        return EthCrypto.publicKeyByPrivateKey(obj.privateKey);
-    },
-    /**
-     * Get manufacturer address from ganache configuration.
-     */
-    getManufacturerAddress: function() {
-        let obj = self.readFile(manufacturerPath);
-        return web3.utils.toChecksumAddress(obj.address);
-    },
-    /**
-     * Get contract address from ganache after 'truffle deploy'.
-     */
-    getContractAddress: function () {
-        let obj = self.readFile(contractPath);
-        return web3.utils.toChecksumAddress(obj.address);
-    },
-    /**
-     * Parsing the local contract ABI from truffle.
-     * in live network, the ABI can be queried from etherscan.io
-     */
-    getContractABI: function () {
-        let obj = self.readFile(contractABIPath);
-        return obj.abi;
     },
     /**
      * Get Gateway URL endpoint for manufacturer send the firmware metadata

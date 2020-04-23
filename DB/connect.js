@@ -12,8 +12,8 @@ var self = module.exports = {
     connectDB: function() {
         con = mysql.createConnection({
             host: "localhost",
-            user: "root",
-            password: "",
+            user: "user",
+            password: "password",
             database: DBname
         });
 
@@ -45,7 +45,7 @@ var self = module.exports = {
     //check if data exist
     checkDeviceExist: async function(Mid,uri) {
         var con = this.connectDB();
-        var sql = "SELECT COUNT(*) as count FROM " + device_table + " WHERE manufacturer_id=" + Mid + " and uri='" + uri + "';";
+        var sql = "SELECT COUNT(*) as count FROM " + device_table + " WHERE manufacturer_id=" + Mid + " and uri like '" + uri + "';";
         const result = await con.query(sql);
         return result[0]['count'];
         

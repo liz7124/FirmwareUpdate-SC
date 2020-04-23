@@ -4,6 +4,7 @@ const Web3 = require('web3');
 const fs = require('fs');
 const dbTools = require('../DB/connect.js');
 const net = require("net");
+const rp = require('request-promise-native');
 const NodeCache = require( "node-cache" );
 
 const myCache = new NodeCache();
@@ -35,10 +36,10 @@ app.post('/checknewfirmware', async (request, response) => {
     //receive request from client (iotivity device)
     console.log("Receive POST request--Check\n");
     console.log(request.body);
-    const Mid = request.body.payload.Mid;
-    const current_firmware_version = request.body.payload.fv;
-    const dtype = request.body.payload.dtype;
-    const uri = request.body.payload.uri;
+    const Mid = request.body.deviceInfo.Mid;
+    const current_firmware_version = request.body.deviceInfo.fv;
+    const dtype = request.body.deviceInfo.dtype;
+    const uri = request.body.deviceInfo.uri;
     
     //store device info if not exist
     try {
@@ -66,35 +67,60 @@ app.post('/checknewfirmware', async (request, response) => {
                             //download new firmware update in the manufacturer's server
                             console.log("Downloading from manufacturer's server...");
                             
-                            let socket;
-                            socket = net.connect(5000, '192.168.0.30');
+                            const payload_hash = web3.utils.keccak256(web3.eth.abi.encodeParameters(["bytes32", "int"],[res[i]['hash'],res[i]['firmware_version']]));
+                            var payload_signature = tools.signPayload(payload_hash, gatewayPrivateKey);
 
-                            let ostream = fs.createWriteStream("./downloads/newfirmware.zip");
-                            let date = new Date(), size = 0, elapsed;
-                            socket.on('data', chunk => {
-                                size += chunk.length;
-                                elapsed = new Date() - date;
-                                socket.write(`\r${(size / (1024 * 1024)).toFixed(2)} MB of data was sent. Total elapsed time is ${elapsed / 1000} s`)
-                                process.stdout.write(`\r${(size / (1024 * 1024)).toFixed(2)} MB of data was sent. Total elapsed time is ${elapsed / 1000} s`);
-                                ostream.write(chunk);
-                            });
-                            socket.on("end", () => {
-                                console.log(`\nFinished getting file. speed was: ${((size / (1024 * 1024)) / (elapsed / 1000)).toFixed(2)} MB/s`);
-                                //process.exit();
-                                //verify binary file (compare hash)
-                                console.log("Verifying...");
-                                try {
-                                    var fu_file = fs.readFileSync('/home/pi/MyProjects/FirmwareUpdate-SC/server/downloads/newfirmware.zip','utf8');
-                                } catch(e) {
-                                    console.log('Error:',e.stack);
-                                }
-                                var hash_metadata = tools.hashPayload(fu_file)
-                                if (hash_metadata == res[i]['hash']) {
-                                    console.log("Verified!")
-                                    response.send("true");
-                                } else {
-                                    response.send("false");
-                                }
+                            var payload = {
+                                Uid: res[i]['hash'],
+                                fv: res[i]['firmware_version'],
+                                signature: payload_signature
+                            }
+                            console.log(payload);
+                            let options = {
+                                method: "POST",
+                                uri: "http://192.168.0.30:5500/downloadnewfirmware",
+                                body: {payload},
+                                resolveWithFullResponse: true,
+                                json: true
+                            };
+                            rp(options).then(function(download_response) {
+                                console.log('Response status code: ', download_response.statusCode);
+                                console.log('Response body: ', download_response.body);
+                        
+                                //if (download_response.body == "true") {
+                                    let socket;
+                                    socket = net.connect(5000, '192.168.0.30');
+
+                                    let ostream = fs.createWriteStream("./downloads/newfirmware.zip");
+                                    let date = new Date(), size = 0, elapsed;
+                                    socket.on('data', chunk => {
+                                        size += chunk.length;
+                                        elapsed = new Date() - date;
+                                        socket.write(`\r${(size / (1024 * 1024)).toFixed(2)} MB of data was sent. Total elapsed time is ${elapsed / 1000} s`)
+                                        process.stdout.write(`\r${(size / (1024 * 1024)).toFixed(2)} MB of data was sent. Total elapsed time is ${elapsed / 1000} s`);
+                                        ostream.write(chunk);
+                                    });
+                                    socket.on("end", () => {
+                                        console.log(`\nFinished getting file. speed was: ${((size / (1024 * 1024)) / (elapsed / 1000)).toFixed(2)} MB/s`);
+                                        //process.exit();
+                                        //verify binary file (compare hash)
+                                        console.log("Verifying...");
+                                        try {
+                                            var fu_file = fs.readFileSync('/home/pi/MyProjects/FirmwareUpdate-SC/server/downloads/newfirmware.zip','utf8');
+                                        } catch(e) {
+                                            console.log('Error:',e.stack);
+                                        }
+                                        var hash_metadata = tools.hashPayload(fu_file)
+                                        if (hash_metadata == res[i]['hash']) {
+                                            console.log("Verified!")
+                                            response.send("true");
+                                        } else {
+                                            response.send("false");
+                                        }
+                                    });
+                                //}
+                            }).catch(function(err) {
+                                console.log(err);
                             });
                         } else {
                             console.log("NOT FOUND METADATA");
@@ -110,8 +136,10 @@ app.post('/checknewfirmware', async (request, response) => {
     }
 });
 
-//update firmware version in DB
-//insert firmware update transaction to DB
+app.post('/savefirmwaretransaction', async (request, response) => {
+    //update firmware version in DB
+    //insert firmware update transaction to DB
+});
 
 app.post('/gwchecknewfirmware', async (request, response) => {
     //receive request from client (iotivity device)
@@ -120,11 +148,12 @@ app.post('/gwchecknewfirmware', async (request, response) => {
     const Mid = request.body.payload.Mid;
     const current_firmware_version = request.body.payload.fv;
     const dtype = request.body.payload.dtype;
+    const dtype_byte = tools.convertStringToByte(dtype);
     const gwsign = request.body.payload.signature;
 
     //verify signature
     console.log("Verifying Signature ...");
-    var payload = web3.utils.keccak256(web3.eth.abi.encodeParameters(["int","int","bytes32"],[Mid,current_firmware_version,dtype]));
+    var payload = web3.utils.keccak256(web3.eth.abi.encodeParameters(["int","int","bytes32"],[Mid,current_firmware_version,dtype_byte]));
     const addressRecover = tools.recoverAddress(gwsign,payload);
 
     if (addressRecover == gatewayAddressB) {
@@ -143,7 +172,7 @@ app.post('/gwchecknewfirmware', async (request, response) => {
                         var c = 1;
 
                          //hash+sign
-                        var res_payload_hash = web3.utils.keccak256(web3.eth.abi.encodeParameters(["bytes32", "int", "int", "bytes32", "bytes32", "bytes32", "bytes32","int"],[res[i]['hash'],res[i]['firmware_version'],res[i]['manufacturer_id'],res[i]['release_date'],res[i]['device_type'],res[i]['url'],res[i]['signature'], c]));
+                        var res_payload_hash = web3.utils.keccak256(web3.eth.abi.encodeParameters(["bytes32", "int", "int", "bytes32", "bytes32", "bytes32", "bytes","int"],[res[i]['hash'],res[i]['firmware_version'],res[i]['manufacturer_id'],tools.convertStringToByte(res[i]['release_date']),tools.convertStringToByte(res[i]['device_type']),tools.convertStringToByte(res[i]['url']),res[i]['signature'], c]));
                         var res_payload_signature = tools.signPayload(res_payload_hash, gatewayPrivateKey);
 
                         var res_payload = {

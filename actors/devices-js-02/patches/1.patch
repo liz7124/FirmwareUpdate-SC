@@ -1,0 +1,9 @@
+--- assets/firmwareupdate/old/Download.c	2020-04-16 21:04:51.526373700 +0900
++++ assets/firmwareupdate/new/Download.c	2020-04-16 21:05:04.895209282 +0900
+@@ -1,5 +1,5 @@
+ #include <stdio.h>
+ 
+ int main() {
+-printf("Hello");
++printf("Hello World!");
+ }

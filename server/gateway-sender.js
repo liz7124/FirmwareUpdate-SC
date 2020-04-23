@@ -20,13 +20,4 @@ server = net.createServer(socket => {
     })
 })
 
-server.listen(5000,'192.168.0.30');
-
-/*//download new firmware
-app.get('/', function(request, response){
-    //response.download('/home/lizz/MyProjects/test-fu/server/downloads/newfirmware.zip');
-});
-
-app.listen(5000, async(request, response) => {
-    console.log("I'm listening");
-});*/
+server.listen(5000,'192.168.0.32');
