@@ -3,7 +3,7 @@ const fs = require('fs');
 const Web3 = require('web3');
 //const rp = require('request-promise-native');
 
-const web3 = new Web3(new Web3.providers.HttpProvider('http://localhost:8545'));
+const web3 = new Web3(new Web3.providers.HttpProvider('http://192.168.0.30:8545'));
 
 const manufacturerPrivateKey = tools.getManufacturerPrivateKey();
 const manufacturerAddress = tools.getManufacturerAddress();
@@ -27,8 +27,8 @@ async function main() {
         dtype: tools.convertStringToByte("temperature_sensor"),
         url: tools.convertStringToByte("http://192.168.0.30/downloads")
     }
-    console.log(firmware_metadata.Uid);
-    console.log(firmware_metadata.release_date);
+    //console.log(firmware_metadata.Uid);
+    //console.log(firmware_metadata.release_date);
     
     //hash + signing
     var metadata_payload = web3.utils.keccak256(web3.eth.abi.encodeParameters(["bytes32", "int", "int", "bytes32", "bytes32", "bytes32"],[firmware_metadata.Uid,firmware_metadata.firmware_version,firmware_metadata.Mid,firmware_metadata.release_date,firmware_metadata.dtype,firmware_metadata.url]));
