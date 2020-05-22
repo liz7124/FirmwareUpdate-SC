@@ -2,16 +2,18 @@ const express = require('express');
 const tools = require('./tools');
 const Web3 = require('web3');
 const fs = require('fs');
-const dbTools = require('../DB/connect.js');
+//const dbTools = require('../DB/connect.js');
+const DB = require('../DB/DB');
 const net = require("net");
 const rp = require('request-promise-native');
 const NodeCache = require( "node-cache" );
 
 const myCache = new NodeCache();
 
-//dbTools.connectDB();
+const dbTools = new DB();
 
-const web3 = new Web3(new Web3.providers.HttpProvider('http://192.168.0.30:8545'));
+//const web3 = new Web3(new Web3.providers.HttpProvider('http://192.168.0.30:8545'));
+const web3 = new Web3(new Web3.providers.WebsocketProvider('ws://192.168.0.30:8545'));
 
 const RC = tools.constructSmartContract(tools.getContractABI(), tools.getContractAddress());
 
@@ -42,12 +44,11 @@ app.post('/checknewfirmware', async (request, response) => {
     const uri = request.body.deviceInfo.uri;
     
     //store device info if not exist
-    try {
+    //try {
         console.log("CHECK DEVICE EXIST");
-        var count = dbTools.checkDeviceExist(Mid,uri);
-        count.then(function(result) {
-            console.log(result);
-            if (result == 0) {
+        var c = dbTools.checkDeviceExist(Mid,uri);
+        //count.then(function(result) {
+            if (c.count == 0) {
                 console.log("Save Device Info to DB");
                 dbTools.saveDeviceInfo(Mid,current_firmware_version,dtype,uri);
             } else {
@@ -55,24 +56,24 @@ app.post('/checknewfirmware', async (request, response) => {
             }
 
             //check FU smart contract that compatible to device
-            try {
+            //try {
                 console.log("CHECK METADATA");
-                var metadata = dbTools.checkMetadata(Mid,dtype,current_firmware_version);
-                metadata.then(function(res) {
-                    console.log(res);
+                var metadata = dbTools.checkMetadata(Mid, tools.convertStringToByte(dtype), current_firmware_version);
+                //metadata.then(function(res) {
+                    console.log(metadata);
                     //compare the new and current version
-                    for (const i in res) {
-                        if (res[i]['firmware_version'] > current_firmware_version) {
+                    for (const i in metadata) {
+                        if (metadata[i]['firmware_version'] > current_firmware_version) {
                             console.log("FOUND METADATA EXIST");
                             //download new firmware update in the manufacturer's server
                             console.log("Downloading from manufacturer's server...");
                             
-                            const payload_hash = web3.utils.keccak256(web3.eth.abi.encodeParameters(["bytes32", "int"],[res[i]['hash'],res[i]['firmware_version']]));
+                            const payload_hash = web3.utils.keccak256(web3.eth.abi.encodeParameters(["bytes32", "int"],[metadata[i]['hash'],metadata[i]['firmware_version']]));
                             var payload_signature = tools.signPayload(payload_hash, gatewayPrivateKey);
 
                             var payload = {
-                                Uid: res[i]['hash'],
-                                fv: res[i]['firmware_version'],
+                                Uid: metadata[i]['hash'],
+                                fv: metadata[i]['firmware_version'],
                                 signature: payload_signature
                             }
                             console.log(payload);
@@ -88,35 +89,42 @@ app.post('/checknewfirmware', async (request, response) => {
                                 console.log('Response body: ', download_response.body);
                         
                                 //if (download_response.body == "true") {
-                                    let socket;
-                                    socket = net.connect(5000, '192.168.0.30');
-
-                                    let ostream = fs.createWriteStream("./downloads/newfirmware.zip");
-                                    let date = new Date(), size = 0, elapsed;
-                                    socket.on('data', chunk => {
-                                        size += chunk.length;
-                                        elapsed = new Date() - date;
-                                        socket.write(`\r${(size / (1024 * 1024)).toFixed(2)} MB of data was sent. Total elapsed time is ${elapsed / 1000} s`)
-                                        process.stdout.write(`\r${(size / (1024 * 1024)).toFixed(2)} MB of data was sent. Total elapsed time is ${elapsed / 1000} s`);
-                                        ostream.write(chunk);
-                                    });
-                                    socket.on("end", () => {
-                                        console.log(`\nFinished getting file. speed was: ${((size / (1024 * 1024)) / (elapsed / 1000)).toFixed(2)} MB/s`);
-                                        //process.exit();
-                                        //verify binary file (compare hash)
-                                        console.log("Verifying...");
-                                        try {
-                                            var fu_file = fs.readFileSync('/home/pi/MyProjects/FirmwareUpdate-SC/server/downloads/newfirmware.zip','utf8');
-                                        } catch(e) {
-                                            console.log('Error:',e.stack);
-                                        }
-                                        var hash_metadata = tools.hashPayload(fu_file)
-                                        if (hash_metadata == res[i]['hash']) {
-                                            console.log("Verified!")
-                                            response.send("true");
-                                        } else {
-                                            response.send("false");
-                                        }
+                                    var io = require('socket.io-client')//('http://192.168.0.30:5000')
+                                    var dl = require('delivery')
+                                    var socket = io('http://192.168.0.30:5000');
+  
+                                    socket.on('connect', function(){
+                                        console.log("Connected!");
+                                        var delivery = dl.listen(socket);
+                                    
+                                        delivery.on('receive.start',function(fileUID){
+                                            console.log('receiving a file!');
+                                        });
+                                    
+                                        delivery.on('receive.success',function(file){
+                                        
+                                        fs.writeFile('/home/pi/MyProjects/FirmwareUpdate-SC/server/downloads/'+file.name, file.buffer, function(err){
+                                            if(err){
+                                                console.log('File could not be saved: ' + err);
+                                            } else{
+                                                console.log('File ' + file.name + " saved");
+                                                //verify binary file (compare hash)
+                                                console.log("Verifying...");
+                                                try {
+                                                    var fu_file = fs.readFileSync('/home/pi/MyProjects/FirmwareUpdate-SC/server/downloads/newfirmware.zip','utf8');
+                                                    var hash_metadata = tools.hashPayload(fu_file)
+                                                    if (hash_metadata == metadata[i]['hash']) {
+                                                        console.log("Verified!")
+                                                        response.status(200).send("true");
+                                                    } else {
+                                                        response.status(403).send("false");
+                                                    }
+                                                } catch(e) {
+                                                    console.log('Error:',e.stack);
+                                                }
+                                            };
+                                          });
+                                        });
                                     });
                                 //}
                             }).catch(function(err) {
@@ -126,14 +134,14 @@ app.post('/checknewfirmware', async (request, response) => {
                             console.log("NOT FOUND METADATA");
                         }
                     }
-                });
-            } catch (err) {
+                //});
+            /*} catch (err) {
                 console.log(err);
-            }
-        });
-    } catch (err) {
+            }*/
+        //});
+    /*} catch (err) {
         console.log(err);
-    }
+    }*/
 });
 
 app.post('/savefirmwaretransaction', async (request, response) => {
@@ -159,30 +167,29 @@ app.post('/gwchecknewfirmware', async (request, response) => {
     if (addressRecover == gatewayAddressB) {
         console.log("Verification Success!");
         //getMetadata from local DB that compatible to device
-        try {
+        //try {
             console.log("CHECK METADATA");
-            var metadata = dbTools.checkMetadata(Mid,dtype,current_firmware_version);
-            metadata.then(function(res) {
-                console.log(res);
+            var metadata = dbTools.checkMetadata(Mid, tools.convertStringToByte(dtype),current_firmware_version);
+            //metadata.then(function(res) {
                 //compare the new and current version
-                for (const i in res) {
-                    if (res[i]['firmware_version'] > current_firmware_version) {
+                for (const i in metadata) {
+                    if (metadata[i]['firmware_version'] > current_firmware_version) {
                         console.log("FOUND METADATA EXIST");
                         //Uid+c+Sign(Uid,c) send back to gateway02
                         var c = 1;
 
                          //hash+sign
-                        var res_payload_hash = web3.utils.keccak256(web3.eth.abi.encodeParameters(["bytes32", "int", "int", "bytes32", "bytes32", "bytes32", "bytes","int"],[res[i]['hash'],res[i]['firmware_version'],res[i]['manufacturer_id'],tools.convertStringToByte(res[i]['release_date']),tools.convertStringToByte(res[i]['device_type']),tools.convertStringToByte(res[i]['url']),res[i]['signature'], c]));
+                        var res_payload_hash = web3.utils.keccak256(web3.eth.abi.encodeParameters(["bytes32", "int", "int", "bytes32", "bytes32", "bytes32", "bytes","int"],[metadata[i]['hash'],metadata[i]['firmware_version'],metadata[i]['manufacturer_id'],metadata[i]['release_date'],metadata[i]['device_type'],metadata[i]['url'],metadata[i]['signature'], c]));
                         var res_payload_signature = tools.signPayload(res_payload_hash, gatewayPrivateKey);
 
                         var res_payload = {
-                            Uid: res[i]['hash'],
-                            fv: res[i]['firmware_version'],
-                            Mid: res[i]['manufacturer_id'],
-                            release_date: res[i]['release_date'],
-                            dtype: res[i]['device_type'],
-                            url: res[i]['url'],
-                            manufacturer_signature: res[i]['signature'],
+                            Uid: metadata[i]['hash'],
+                            fv: metadata[i]['firmware_version'],
+                            Mid: metadata[i]['manufacturer_id'],
+                            release_date: metadata[i]['release_date'],
+                            dtype: metadata[i]['device_type'],
+                            url: metadata[i]['url'],
+                            manufacturer_signature: metadata[i]['signature'],
                             c: c,
                             sign: res_payload_signature
                         }
@@ -190,15 +197,16 @@ app.post('/gwchecknewfirmware', async (request, response) => {
                         var nounce = {c:1};
                         var success = myCache.set("nounce",nounce,300);
                         
-                        response.send(res_payload);
+                        response.status(200).send(res_payload);
                     } else {
                         console.log("NOT FOUND METADATA");
+                        response.status(404).send("Metadata Nof Found");
                     }
                 }
-            });
-        } catch (err) {
+            //});
+        /*} catch (err) {
             console.log(err);
-        }
+        }*/
     }
 });
 
@@ -247,20 +255,21 @@ app.listen(4000, async(request, response) => {
         if (addrRecover == manufacturerAddress) {
             console.log("Verification Success!");
             //check metadata exist or not
-            try {
+            //try {
                 var res = dbTools.checkMetadataExist(Uid);
-                res.then(function(result) {
-                    if (result == 0) {
+                //res.then(function(result) {
+                    if (res.count == 0) {
                         //store the metadata to DB
-                        dbTools.saveMetadataFirmwareUpdate(Uid,Mid,new_firmware_version, tools.convertByteToString(dtype), tools.convertByteToString(release_date), tools.convertByteToString(url), signature);
+                        dbTools.saveFUMetadata(Uid,Mid,new_firmware_version, dtype, release_date, url, signature);
+                        //dbTools.saveFUMetadata(Uid,Mid,new_firmware_version, escape(tools.convertByteToString(dtype)) , escape(tools.convertByteToString(release_date)), escape(tools.convertByteToString(url)), signature);
                         console.log("Store metadata to Database");
                     } else {
                         console.log("Metadata Exist");
                     }
-                });
-            } catch (err) {
+                //});
+            /*} catch (err) {
                 console.log(err);
-            }
+            }*/
             
         }
     }

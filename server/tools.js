@@ -11,7 +11,7 @@ const gatewayPathB = './assets/gateway02.json';
 const contractABIPath = '../build/contracts/FirmwareUpdate.json';
 
 //endpoints
-const gatewayEndpoint = 'http://localhost:4000/newfirmwareupdate';
+const gatewayEndpoint = 'http://192.168.0.32:4000/newfirmwareupdate';
 
 // for symmetric encryption and decryption
 const algorithm = 'aes256';
@@ -19,7 +19,8 @@ const inputEncoding = 'utf8';
 const outputEncoding = 'hex';
 
 //web3
-const web3 = new Web3(new Web3.providers.HttpProvider('http://192.168.0.30:8545'));
+//const web3 = new Web3(new Web3.providers.HttpProvider('http://192.168.0.30:8545'));
+const web3 = new Web3(new Web3.providers.WebsocketProvider('ws://192.168.0.30:8545'));
 
 var self = module.exports = {
     /**
